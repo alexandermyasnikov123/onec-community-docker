@@ -5,8 +5,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG PLATFORM_VERSION
 ARG PLATFORM_ARCH
 ARG CLIENT_COMPONENTS
+ARG INSTALLER_LANGUAGE
+ARG DISABLE_COMPONENTS
 
-# Установка ВСЕХ необходимых зависимостей для графического клиента 1С
+# Установка всех зависимостей
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     # GTK3 и базовые графические библиотеки
@@ -14,75 +16,83 @@ RUN apt-get update && \
     libgtk2.0-0 \
     libgdk-pixbuf2.0-0 \
     libglib2.0-0 \
-    # Для GTK модулей
+    # GTK модули
     libcanberra-gtk3-module \
     libcanberra-gtk-module \
     packagekit-gtk3-module \
-    # Для accessibility bus (предупреждение AT-SPI)
+    # Accessibility bus
     at-spi2-core \
-    # Для утилиты ip (замена net-tools)
-    iproute2 \
-    # OpenGL и графические библиотеки
+    # OpenGL
     libglu1-mesa \
     mesa-utils \
     freeglut3 \
     libgl1-mesa-glx \
     libgl1-mesa-dri \
     libglapi-mesa \
-    # Аудио/видео для отчетов
+    # Аудио/видео
     libgstreamer1.0-0 \
     libgstreamer-plugins-base1.0-0 \
     gstreamer1.0-plugins-good \
-    # Шрифты и локализация
+    # Шрифты
     fonts-dejavu \
     fonts-dejavu-core \
     fonts-dejavu-extra \
-    locales \
     ttf-mscorefonts-installer \
-    # Системные утилиты для X11
+    # X11
     dbus-x11 \
     x11-utils \
     x11-xserver-utils \
     xauth \
-    # Для работы с сетью и процессами
-    net-tools \
+    # Сеть
+    iproute2 \
     iputils-ping \
     curl \
     ca-certificates \
-    # Дополнительные зависимости 1С
+    # Доп. библиотеки 1С
     libwebkit2gtk-4.0-37 \
     libatk-bridge2.0-0 \
     libcups2 \
     libpango-1.0-0 \
+    # Локализация
+    language-pack-ru \
+    locales \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Настройка локали (обязательно для корректной работы 1С с русским интерфейсом)
-RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
-    sed -i -e 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && \
-    locale-gen en_US.UTF-8 ru_RU.UTF-8
+# Настройка локали
+RUN sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen ru_RU.UTF-8
 
-# Создаем пользователя для запуска GUI приложения (важно для X11)
-RUN useradd -m -s /bin/bash -u 1000 user && \
-    mkdir -p /home/user/.1cv8/1C/1cv8/conf && \
-    chown -R user:user /home/user
+ENV LANG=ru_RU.UTF-8
+ENV LANGUAGE=ru_RU:ru
+ENV LC_ALL=ru_RU.UTF-8
 
-# Копируем установщик и устанавливаем
+# СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ ДЛЯ 1С С ДОМАШНЕЙ ДИРЕКТОРИЕЙ
+RUN useradd -m -s /bin/bash -u 1000 -G sudo 1cuser && \
+    echo "1cuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    mkdir -p /home/1cuser/.1cv8/1C/1cv8/conf && \
+    chown -R 1cuser:1cuser /home/1cuser
+
+# Копируем установщик
 COPY /distr/setup-full-${PLATFORM_VERSION}-${PLATFORM_ARCH}.run /tmp/installer.run
 
+# Устанавливаем 1С
 RUN chmod +x /tmp/installer.run && \
-    /tmp/installer.run --mode unattended \
-        --enable-components ${CLIENT_COMPONENTS} \
-        --installer-language ru && \
+    /tmp/installer.run \
+        --mode unattended \
+        --enable-components ${CLIENT_COMPONENTS} && \
     rm /tmp/installer.run
 
-# Создаем каталог для общих лицензий и симлинк
+# СОЗДАЁМ СИМЛИНК ДЛЯ ЛИЦЕНЗИЙ
+# Клиент будет писать в /home/1cuser/.1cv8/1C/1cv8/conf/
+# но через симлинк файлы будут попадать в общий том
 RUN mkdir -p /var/shared_licenses && \
     chmod 777 /var/shared_licenses && \
-    ln -sf /var/shared_licenses /home/user/.1cv8/1C/1cv8/conf/licenses
+    ln -sf /var/shared_licenses /home/1cuser/.1cv8/1C/1cv8/conf/licenses
 
-# Переключаемся на непривилегированного пользователя
-USER user
-WORKDIR /home/user
+# Переключаемся на созданного пользователя
+USER 1cuser
+WORKDIR /home/1cuser
 
-# Команда запуска через shell для подстановки переменной
-ENTRYPOINT ["sh", "-c", "/opt/1cv8/x86_64/${PLATFORM_VERSION}/1cv8"]
+# Запуск с dbus сессией
+CMD ["sh", "-c", "dbus-run-session /opt/1cv8/x86_64/${PLATFORM_VERSION}/1cv8"]

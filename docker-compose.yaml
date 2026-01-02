@@ -39,6 +39,7 @@ services:
       # Пробрасываем сокет X11 для отображения графического интерфейса[citation:2]
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ${HOME}/.Xauthority:/home/user/.Xauthority:ro
+      - ./client_home:/home/1c_user:rw
     environment:
       - DISPLAY=${DISPLAY}
       - USER=1c_user
