@@ -1,60 +1,110 @@
-version: '3.8'
-
 services:
+  1c-postgres:
+    image: akocur/postgresql-1c-17
+    volumes:
+      - 1c_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${ONEC_PG_PORT}:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      start_period: 2s
+      start_interval: 1s
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    restart: no
+
   1c-server:
     build:
+      context: .
       dockerfile: ./1c-server/Dockerfile
       args:
         - PLATFORM_VERSION=${PLATFORM_VERSION}
         - PLATFORM_ARCH=${PLATFORM_ARCH}
         - SERVER_COMPONENTS=${SERVER_COMPONENTS}
+        - ONEC_USER=${ONEC_SERVER_USER}
     container_name: ${SERVER_HOST}
     hostname: ${SERVER_HOST}
+    depends_on:
+      1c-postgres:
+        condition: service_healthy
     volumes:
-      # Монтируем общий каталог с лицензиями в служебный путь сервера
-      - ./shared_data/licenses:/var/1C/licenses
-      # Можно добавить том для данных
-      # - 1c_data:/var/1C/1cv8
+      - 1c_licenses:/var/1C/licenses
+      - 1c_server_data:/var/1C/1cv8
     ports:
-      - "${SERVER_PORT}:${SERVER_PORT}"
-      - "${SERVER_AGENT_PORT}:${SERVER_AGENT_PORT}"
+      - "127.0.0.1:${SERVER_PORT}:${SERVER_PORT}"
+      - "127.0.0.1:${SERVER_AGENT_PORT}:${SERVER_AGENT_PORT}"
+      - "127.0.0.1:${SERVER_WEB_ADMIN_PORT}:${SERVER_WEB_ADMIN_PORT}"
+    environment:
+      - ONEC_USER=${ONEC_SERVER_USER}
     env_file:
       - .env
-    networks:
-      - 1c-network
-    restart: unless-stopped
+    restart: no
 
   1c-client:
     build:
+      context: .
       dockerfile: ./1c-client/Dockerfile
       args:
         - PLATFORM_VERSION=${PLATFORM_VERSION}
         - PLATFORM_ARCH=${PLATFORM_ARCH}
         - CLIENT_COMPONENTS=${CLIENT_COMPONENTS}
+        - ONEC_USER=${ONEC_CLIENT_USER}
     container_name: ${CLIENT_HOST}
     hostname: ${CLIENT_HOST}
     volumes:
-      # Монтируем тот же каталог с лицензиями в путь клиента
-      - ./shared_data/licenses:/var/shared_licenses
-      # Пробрасываем сокет X11 для отображения графического интерфейса[citation:2]
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - ${HOME}/.Xauthority:/home/user/.Xauthority:ro
-      - ./client_home:/home/1c_user:rw
+      - 1c_licenses:/var/shared_licenses
+      - 1c_client_home:/home/${ONEC_CLIENT_USER}
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/home/${ONEC_CLIENT_USER}/.Xauthority:ro
     environment:
       - DISPLAY=${DISPLAY}
-      - USER=1c_user
+      - USER=${ONEC_CLIENT_USER}
+      - HOME=/home/${ONEC_CLIENT_USER}
+      - QT_X11_NO_MITSHM=1
+      - _X11_NO_MITSHM=1
+      - _MITSHM=0
     env_file:
       - .env
-    networks:
-      - 1c-network
     depends_on:
       - 1c-server
     stdin_open: true
     tty: true
+    restart: no
 
-# volumes:
-#   1c_data:
+secrets:
+  1c-postgres-db:
+    file: ./secrets/1c-postgres-db
+  1c-postgres-user:
+    file: ./secrets/1c-postgres-user
+  1c-postgres-passwd:
+    file: ./secrets/1c-postgres-passwd
 
-networks:
-  1c-network:
-    driver: bridge
+volumes:
+  1c_postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${BASE_MOUNT_DIR}/data/pg_data
+
+  1c_licenses:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${BASE_MOUNT_DIR}/data/licenses"
+
+  1c_server_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${BASE_MOUNT_DIR}/data/server_data"
+
+  1c_client_home:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${BASE_MOUNT_DIR}/data/client_home"

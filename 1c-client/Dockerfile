@@ -1,14 +1,18 @@
 FROM ubuntu:22.04
+LABEL authors="Alexander Myasnikov"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 ARG PLATFORM_VERSION
 ARG PLATFORM_ARCH
 ARG CLIENT_COMPONENTS
-ARG INSTALLER_LANGUAGE
-ARG DISABLE_COMPONENTS
+ARG ONEC_USER
 
-# Установка всех зависимостей
+ENV PLATFORM_VERSION=${PLATFORM_VERSION}
+ENV PLATFORM_ARCH=${PLATFORM_ARCH}
+ENV ONEC_USER=${ONEC_USER}
+ENV HOME=/home/${ONEC_USER}
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     # GTK3 и базовые графические библиотеки
@@ -59,7 +63,6 @@ RUN apt-get update && \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Настройка локали
 RUN sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && \
     locale-gen ru_RU.UTF-8
 
@@ -67,32 +70,34 @@ ENV LANG=ru_RU.UTF-8
 ENV LANGUAGE=ru_RU:ru
 ENV LC_ALL=ru_RU.UTF-8
 
-# СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ ДЛЯ 1С С ДОМАШНЕЙ ДИРЕКТОРИЕЙ
-RUN useradd -m -s /bin/bash -u 1000 -G sudo 1cuser && \
-    echo "1cuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    mkdir -p /home/1cuser/.1cv8/1C/1cv8/conf && \
-    chown -R 1cuser:1cuser /home/1cuser
+RUN useradd -m -s /bin/bash -u 1000 -G sudo ${ONEC_USER} && \
+    echo "${ONEC_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Копируем установщик
+RUN mkdir -p /home/${ONEC_USER}/1C_Workdir && \
+    mkdir -p /var/shared_licenses && \
+    chown -R ${ONEC_USER}:${ONEC_USER} /home/${ONEC_USER} && \
+    chmod 755 /home/${ONEC_USER} && \
+    chmod 777 /var/shared_licenses
+
 COPY /distr/setup-full-${PLATFORM_VERSION}-${PLATFORM_ARCH}.run /tmp/installer.run
 
-# Устанавливаем 1С
 RUN chmod +x /tmp/installer.run && \
     /tmp/installer.run \
         --mode unattended \
         --enable-components ${CLIENT_COMPONENTS} && \
     rm /tmp/installer.run
 
-# СОЗДАЁМ СИМЛИНК ДЛЯ ЛИЦЕНЗИЙ
-# Клиент будет писать в /home/1cuser/.1cv8/1C/1cv8/conf/
-# но через симлинк файлы будут попадать в общий том
-RUN mkdir -p /var/shared_licenses && \
-    chmod 777 /var/shared_licenses && \
-    ln -sf /var/shared_licenses /home/1cuser/.1cv8/1C/1cv8/conf/licenses
+VOLUME ["/var/shared_licenses"]
+VOLUME ["/home/${ONEC_USER}"]
 
-# Переключаемся на созданного пользователя
-USER 1cuser
-WORKDIR /home/1cuser
+RUN echo '#!/bin/bash' > /start-client.sh && \
+    echo 'set -e' >> /start-client.sh && \
+    echo 'mkdir -p ~/.1cv8/1C/1cv8 2>/dev/null || true' >> /start-client.sh && \
+    echo 'ln -sf /var/shared_licenses ~/.1cv8/1C/1cv8/conf 2>/dev/null || true' >> /start-client.sh && \
+    echo 'exec /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION}/1cv8' >> /start-client.sh && \
+    chmod +x /start-client.sh
 
-# Запуск с dbus сессией
-CMD ["sh", "-c", "dbus-run-session /opt/1cv8/x86_64/${PLATFORM_VERSION}/1cv8"]
+USER ${ONEC_USER}
+WORKDIR /home/${ONEC_USER}/1C_Workdir
+
+ENTRYPOINT ["/start-client.sh"]

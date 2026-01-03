@@ -1,15 +1,19 @@
-# Используем Ubuntu как базовый образ
 FROM ubuntu:22.04
+LABEL authors="Alexander Myasnikov"
 
-# Отключаем интерактивные вопросы при установке пакетов
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Принимаем переменные окружения из .env или docker-compose
 ARG PLATFORM_VERSION
 ARG PLATFORM_ARCH
 ARG SERVER_COMPONENTS
+ARG ONEC_USER
 
-# Устанавливаем зависимости и создаём пользователя для запуска сервера
+ENV PLATFORM_VERSION=${PLATFORM_VERSION}
+ENV PLATFORM_ARCH=${PLATFORM_ARCH}
+ENV SERVER_PORT=${SERVER_PORT:-1540}
+ENV SERVER_AGENT_PORT=${SERVER_AGENT_PORT:-1541}
+ENV ONEC_USER=${ONEC_USER}
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libgsf-1-114 \
@@ -17,31 +21,46 @@ RUN apt-get update && \
     libgstreamer1.0-0 \
     sudo \
     net-tools \
+    language-pack-ru \
+    locales \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаём системного пользователя usr1cv8, от имени которого будет работать сервер[citation:6]
-RUN groupadd -g 1001 grp1cv8 && \
-    useradd -u 1001 -g grp1cv8 --shell /bin/bash --create-home usr1cv8
+RUN sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen ru_RU.UTF-8
 
-# Копируем установщик 1С в контейнер (предполагается, что он лежит рядом с Dockerfile)
+ENV LANG=ru_RU.UTF-8
+ENV LANGUAGE=ru_RU:ru
+ENV LC_ALL=ru_RU.UTF-8
+
+RUN groupadd -g 1001 grp1cv8 && \
+    useradd -u 1001 -g grp1cv8 --shell /bin/bash --create-home ${ONEC_USER}
+
 COPY /distr/setup-full-${PLATFORM_VERSION}-${PLATFORM_ARCH}.run /tmp/installer.run
 
-# Устанавливаем платформу 1С в автоматическом режиме с выбранными компонентами
 RUN chmod +x /tmp/installer.run && \
-    /tmp/installer.run --mode unattended --enable-components ${SERVER_COMPONENTS} && \
+    /tmp/installer.run \
+        --mode unattended \
+        --enable-components ${SERVER_COMPONENTS} && \
     rm /tmp/installer.run
 
-# Копируем скрипт для корректного запуска сервера
-COPY /1c-server/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Создаём каталог для лицензий и настраиваем права
-RUN mkdir -p /var/1C/licenses && \
-    chown -R usr1cv8:grp1cv8 /var/1C && \
+RUN mkdir -p /var/1C/1cv8 /var/1C/licenses && \
+    chown -R ${ONEC_USER}:grp1cv8 /var/1C && \
+    chmod 755 /var/1C/1cv8 && \
     chmod 777 /var/1C/licenses
 
-# Открываем порты для сервера (основной и агента)
+VOLUME ["/var/1C/licenses"]
+VOLUME ["/var/1C/1cv8"]
+
 EXPOSE ${SERVER_PORT} ${SERVER_AGENT_PORT}
 
-# Указываем скрипт запуска
-ENTRYPOINT ["/entrypoint.sh"]
+RUN echo '#!/bin/bash' > /start-server.sh && \
+    echo 'set -e' >> /start-server.sh && \
+    echo '' >> /start-server.sh && \
+    echo 'exec sudo -u ${ONEC_USER} /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION}/ragent \' >> /start-server.sh && \
+    echo '  -debug \' >> /start-server.sh && \
+    echo '  -d /var/1C/1cv8 \' >> /start-server.sh && \
+    echo '  -port ${SERVER_PORT} \' >> /start-server.sh && \
+    echo '  -regport ${SERVER_AGENT_PORT}' >> /start-server.sh && \
+    chmod +x /start-server.sh
+
+ENTRYPOINT ["/start-server.sh"]
