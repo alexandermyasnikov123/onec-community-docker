@@ -90,14 +90,10 @@ RUN chmod +x /tmp/installer.run && \
 VOLUME ["/var/shared_licenses"]
 VOLUME ["/home/${ONEC_USER}"]
 
-RUN echo '#!/bin/bash' > /start-client.sh && \
-    echo 'set -e' >> /start-client.sh && \
-    echo 'mkdir -p ~/.1cv8/1C/1cv8 2>/dev/null || true' >> /start-client.sh && \
-    echo 'ln -sf /var/shared_licenses ~/.1cv8/1C/1cv8/conf 2>/dev/null || true' >> /start-client.sh && \
-    echo 'exec /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION}/1cv8' >> /start-client.sh && \
-    chmod +x /start-client.sh
+COPY /1c-client/entrypoint.sh /opt/1cv8/
+RUN chmod +x /opt/1cv8/entrypoint.sh
 
 USER ${ONEC_USER}
 WORKDIR /home/${ONEC_USER}/1C_Workdir
 
-ENTRYPOINT ["/start-client.sh"]
+ENTRYPOINT ["/opt/1cv8/entrypoint.sh"]

@@ -2,9 +2,9 @@ services:
   1c-postgres:
     image: akocur/postgresql-1c-17
     volumes:
-      - 1c_postgres_data:/var/lib/postgresql/data
+      - 1c-postgres_data:/var/lib/pgpro/1c-17/data
     ports:
-      - "127.0.0.1:${ONEC_PG_PORT}:5432"
+      - 127.0.0.1:${ONEC_PG_PORT}:5432
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       start_period: 2s
@@ -16,27 +16,22 @@ services:
 
   1c-server:
     build:
-      context: .
       dockerfile: ./1c-server/Dockerfile
       args:
         - PLATFORM_VERSION=${PLATFORM_VERSION}
-        - PLATFORM_ARCH=${PLATFORM_ARCH}
         - SERVER_COMPONENTS=${SERVER_COMPONENTS}
-        - ONEC_USER=${ONEC_SERVER_USER}
     container_name: ${SERVER_HOST}
     hostname: ${SERVER_HOST}
     depends_on:
       1c-postgres:
         condition: service_healthy
     volumes:
-      - 1c_licenses:/var/1C/licenses
-      - 1c_server_data:/var/1C/1cv8
+      - 1c-server_license:/var/1C/licences
+      - 1c-server_data:/home/${ONEC_SERVER_USER}/.1cv8
     ports:
-      - "127.0.0.1:${SERVER_PORT}:${SERVER_PORT}"
-      - "127.0.0.1:${SERVER_AGENT_PORT}:${SERVER_AGENT_PORT}"
-      - "127.0.0.1:${SERVER_WEB_ADMIN_PORT}:${SERVER_WEB_ADMIN_PORT}"
-    environment:
-      - ONEC_USER=${ONEC_SERVER_USER}
+      - 127.0.0.1:${SERVER_PORT}:${SERVER_PORT}
+      - 127.0.0.1:${SERVER_AGENT_PORT}:${SERVER_AGENT_PORT}
+      - 127.0.0.1:${SERVER_WEB_ADMIN_PORT}:${SERVER_WEB_ADMIN_PORT}
     env_file:
       - .env
     restart: no
@@ -52,11 +47,11 @@ services:
         - ONEC_USER=${ONEC_CLIENT_USER}
     container_name: ${CLIENT_HOST}
     hostname: ${CLIENT_HOST}
-    volumes:
-      - 1c_licenses:/var/shared_licenses
-      - 1c_client_home:/home/${ONEC_CLIENT_USER}
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${XAUTHORITY:-$HOME/.Xauthority}:/home/${ONEC_CLIENT_USER}/.Xauthority:ro
+    #volumes:
+      #- 1c_licenses:/var/shared_licenses
+      #- 1c_client_home:/home/${ONEC_CLIENT_USER}
+      #- /tmp/.X11-unix:/tmp/.X11-unix:rw
+      #- ${XAUTHORITY:-$HOME/.Xauthority}:/home/${ONEC_CLIENT_USER}/.Xauthority:ro
     environment:
       - DISPLAY=${DISPLAY}
       - USER=${ONEC_CLIENT_USER}
@@ -81,30 +76,23 @@ secrets:
     file: ./secrets/1c-postgres-passwd
 
 volumes:
-  1c_postgres_data:
+  1c-postgres_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${BASE_MOUNT_DIR}/data/pg_data
+      device: ${BASE_MOUNT_DIR}/data/1c-postgres_data
 
-  1c_licenses:
+  1c-server_license:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: "${BASE_MOUNT_DIR}/data/licenses"
+      device: ${BASE_MOUNT_DIR}/data/1c-server_license
 
-  1c_server_data:
+  1c-server_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: "${BASE_MOUNT_DIR}/data/server_data"
-
-  1c_client_home:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: "${BASE_MOUNT_DIR}/data/client_home"
+      device: ${BASE_MOUNT_DIR}/data/1c-server_data

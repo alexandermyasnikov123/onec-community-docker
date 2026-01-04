@@ -2,3 +2,5 @@ distr/
 shared_data/
 data*/
 .idea
+project*.zip
+project*.tar
