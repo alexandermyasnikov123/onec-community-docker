@@ -8,7 +8,6 @@ RUN apt-get update && \
     libgsf-1-114 \
     libglib2.0-0 \
     libgstreamer1.0-0 \
-    sudo \
     net-tools \
     language-pack-ru \
     locales \
@@ -28,17 +27,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG PLATFORM_VERSION
 ARG PLATFORM_ARCH=x86_64
 
-ARG SERVER_COMPONENTS
+ARG SERVER_COMPONENTS=server,server_admin,ws,liberica_jre,ru
 
-ARG ONEC_SERVER_USER=usr1srv
 ARG ONEC_USER_GID=1001
 ARG ONEC_USER_UID=1001
+ARG ONEC_USER_NAME=usr1cclnt
 
-ENV SERVER_PORT=${SERVER_PORT:-1540}
-ENV SERVER_AGENT_PORT=${SERVER_AGENT_PORT:-1541}
-
-RUN groupadd -g ${ONEC_USER_GID} grp1cv8 && \
-    useradd -u ${ONEC_USER_UID} -g grp1cv8 --shell /bin/bash --create-home ${ONEC_SERVER_USER}
+RUN groupadd -r grp1cv8 --gid ${ONEC_USER_GID} && \
+    useradd -r -g grp1cv8 --uid ${ONEC_USER_UID} --home-dir /home/${ONEC_USER_NAME} --shell /bin/bash ${ONEC_USER_NAME} && \
+    mkdir -p /var/log/1C /home/${ONEC_USER_NAME}/.1cv8/1C/1cv8/conf /opt/1cv8/current/conf && \
+    chown -R ${ONEC_USER_NAME}:grp1cv8 /var/log/1C /home/${ONEC_USER_NAME}
 
 COPY /distr/setup-full-${PLATFORM_VERSION}-${PLATFORM_ARCH}.run /tmp/installer.run
 
@@ -46,16 +44,17 @@ RUN chmod +x /tmp/installer.run && \
     /tmp/installer.run --mode unattended --enable-components ${SERVER_COMPONENTS} && \
     rm /tmp/installer.run
 
-RUN mkdir -p /opt/1cv8
-RUN ln -s /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION} /opt/1cv8/current
-RUN ln -s /opt/1cv8/current/ragent 1c_ragent
+RUN ln -s /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION} /1c_dir
+RUN ln -s /1c_dir/ragent 1c_ragent
 
-VOLUME /var/1C/licences
-VOLUME /home/${ONEC_SERVER_USER}/.1cv8
+VOLUME /1c_dir/conf
+VOLUME /home/${ONEC_USER_NAME}
 
 EXPOSE ${SERVER_PORT} ${SERVER_AGENT_PORT}
 
 COPY /1c-server/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT ["sh", "-c", "./entrypoint.sh"]
+USER ${ONEC_USER_NAME}
+
+ENTRYPOINT ["/entrypoint.sh"]

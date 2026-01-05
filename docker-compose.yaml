@@ -1,10 +1,11 @@
 services:
   1c-postgres:
     image: akocur/postgresql-1c-17
+    container_name: 1c-postgres
     volumes:
       - 1c-postgres_data:/var/lib/pgpro/1c-17/data
     ports:
-      - 127.0.0.1:${ONEC_PG_PORT}:5432
+      - 127.0.0.1:$ONEC_PG_PORT:5432
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       start_period: 2s
@@ -18,62 +19,49 @@ services:
     build:
       dockerfile: ./1c-server/Dockerfile
       args:
-        - PLATFORM_VERSION=${PLATFORM_VERSION}
-        - SERVER_COMPONENTS=${SERVER_COMPONENTS}
-    container_name: ${SERVER_HOST}
-    hostname: ${SERVER_HOST}
+        - PLATFORM_VERSION=$PLATFORM_VERSION
+        - ONEC_USER_NAME=$ONEC_USER_NAME
+    container_name: 1c-server
+    env_file:
+      - .env
     depends_on:
       1c-postgres:
         condition: service_healthy
-    volumes:
-      - 1c-server_license:/var/1C/licences
-      - 1c-server_data:/home/${ONEC_SERVER_USER}/.1cv8
     ports:
-      - 127.0.0.1:${SERVER_PORT}:${SERVER_PORT}
-      - 127.0.0.1:${SERVER_AGENT_PORT}:${SERVER_AGENT_PORT}
-      - 127.0.0.1:${SERVER_WEB_ADMIN_PORT}:${SERVER_WEB_ADMIN_PORT}
-    env_file:
-      - .env
+      - $SERVER_PORT:1540
+      - $SERVER_AGENT_PORT:1541
+      - $SERVER_WEB_ADMIN_PORT:1542
+      - "1560-1591:1560-1591"
+    volumes:
+      - 1c-server_conf:/1c_dir/conf
+      - 1c-server_data:/home/$ONEC_USER_NAME
     restart: no
 
   1c-client:
     build:
-      context: .
       dockerfile: ./1c-client/Dockerfile
       args:
-        - PLATFORM_VERSION=${PLATFORM_VERSION}
-        - PLATFORM_ARCH=${PLATFORM_ARCH}
-        - CLIENT_COMPONENTS=${CLIENT_COMPONENTS}
-        - ONEC_USER=${ONEC_CLIENT_USER}
-    container_name: ${CLIENT_HOST}
-    hostname: ${CLIENT_HOST}
-    #volumes:
-      #- 1c_licenses:/var/shared_licenses
-      #- 1c_client_home:/home/${ONEC_CLIENT_USER}
-      #- /tmp/.X11-unix:/tmp/.X11-unix:rw
-      #- ${XAUTHORITY:-$HOME/.Xauthority}:/home/${ONEC_CLIENT_USER}/.Xauthority:ro
+        - PLATFORM_VERSION=$PLATFORM_VERSION
+        - ONEC_USER_NAME=$ONEC_USER_NAME
+    container_name: 1c-client
+    env_file:
+      - .env
     environment:
-      - DISPLAY=${DISPLAY}
-      - USER=${ONEC_CLIENT_USER}
-      - HOME=/home/${ONEC_CLIENT_USER}
+      - DISPLAY=$DISPLAY
+      - XAUTHORITY=/tmp/.docker.xauth
       - QT_X11_NO_MITSHM=1
       - _X11_NO_MITSHM=1
       - _MITSHM=0
-    env_file:
-      - .env
     depends_on:
       - 1c-server
+    volumes:
+      - 1c-client_home:/home/$ONEC_USER_NAME
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY}:/tmp/.docker.xauth:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
     stdin_open: true
     tty: true
     restart: no
-
-secrets:
-  1c-postgres-db:
-    file: ./secrets/1c-postgres-db
-  1c-postgres-user:
-    file: ./secrets/1c-postgres-user
-  1c-postgres-passwd:
-    file: ./secrets/1c-postgres-passwd
 
 volumes:
   1c-postgres_data:
@@ -83,12 +71,12 @@ volumes:
       o: bind
       device: ${BASE_MOUNT_DIR}/data/1c-postgres_data
 
-  1c-server_license:
+  1c-server_conf:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${BASE_MOUNT_DIR}/data/1c-server_license
+      device: ${BASE_MOUNT_DIR}/data/1c-server_conf
 
   1c-server_data:
     driver: local
@@ -96,3 +84,10 @@ volumes:
       type: none
       o: bind
       device: ${BASE_MOUNT_DIR}/data/1c-server_data
+
+  1c-client_home:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${BASE_MOUNT_DIR}/data/1c-client_home

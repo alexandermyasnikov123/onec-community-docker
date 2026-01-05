@@ -1,17 +1,7 @@
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS base_image
 LABEL authors="Alexander Myasnikov"
 
 ENV DEBIAN_FRONTEND=noninteractive
-
-ARG PLATFORM_VERSION
-ARG PLATFORM_ARCH
-ARG CLIENT_COMPONENTS
-ARG ONEC_USER
-
-ENV PLATFORM_VERSION=${PLATFORM_VERSION}
-ENV PLATFORM_ARCH=${PLATFORM_ARCH}
-ENV ONEC_USER=${ONEC_USER}
-ENV HOME=/home/${ONEC_USER}
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -60,40 +50,50 @@ RUN apt-get update && \
     # Локализация
     language-pack-ru \
     locales \
-    sudo \
     && rm -rf /var/lib/apt/lists/*
 
-RUN sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && \
-    locale-gen ru_RU.UTF-8
+RUN sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && locale-gen ru_RU.UTF-8
 
 ENV LANG=ru_RU.UTF-8
 ENV LANGUAGE=ru_RU:ru
 ENV LC_ALL=ru_RU.UTF-8
 
-RUN useradd -m -s /bin/bash -u 1000 -G sudo ${ONEC_USER} && \
-    echo "${ONEC_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+FROM base_image
+LABEL authors="Alexander Myasnikov"
 
-RUN mkdir -p /home/${ONEC_USER}/1C_Workdir && \
-    mkdir -p /var/shared_licenses && \
-    chown -R ${ONEC_USER}:${ONEC_USER} /home/${ONEC_USER} && \
-    chmod 755 /home/${ONEC_USER} && \
-    chmod 777 /var/shared_licenses
+ARG PLATFORM_VERSION
+ARG PLATFORM_ARCH=x86_64
+
+ARG CLIENT_COMPONENTS=client_full,client_thin_fib,desktop_icons,ru
+
+ENV LANG=ru_RU.UTF-8
+ENV LANGUAGE=ru_RU:ru
+ENV LC_ALL=ru_RU.UTF-8
+
+ARG ONEC_USER_GID=1001
+ARG ONEC_USER_UID=1001
+ARG ONEC_USER_NAME=usr1cclnt
+
+RUN groupadd -r grp1cv8 --gid ${ONEC_USER_GID} && \
+    useradd -r -g grp1cv8 --uid ${ONEC_USER_UID} --home-dir /home/${ONEC_USER_NAME} --shell /bin/bash ${ONEC_USER_NAME} && \
+    mkdir -p /home/${ONEC_USER_NAME}/.1cv8 && \
+    chown -R ${ONEC_USER_NAME}:grp1cv8 /home/${ONEC_USER_NAME}
 
 COPY /distr/setup-full-${PLATFORM_VERSION}-${PLATFORM_ARCH}.run /tmp/installer.run
 
 RUN chmod +x /tmp/installer.run && \
-    /tmp/installer.run \
-        --mode unattended \
-        --enable-components ${CLIENT_COMPONENTS} && \
+    /tmp/installer.run --mode unattended --enable-components ${CLIENT_COMPONENTS} && \
     rm /tmp/installer.run
 
-VOLUME ["/var/shared_licenses"]
-VOLUME ["/home/${ONEC_USER}"]
+RUN ln -s /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION} /1c_dir
 
-COPY /1c-client/entrypoint.sh /opt/1cv8/
-RUN chmod +x /opt/1cv8/entrypoint.sh
+COPY /1c-client/entrypoint.sh /1c_dir/
+RUN chmod +x /1c_dir/entrypoint.sh
 
-USER ${ONEC_USER}
-WORKDIR /home/${ONEC_USER}/1C_Workdir
+VOLUME /home/${ONEC_USER_NAME}
 
-ENTRYPOINT ["/opt/1cv8/entrypoint.sh"]
+USER ${ONEC_USER_NAME}
+WORKDIR /home/${ONEC_USER_NAME}
+
+ENTRYPOINT ["/1c_dir/entrypoint.sh"]
+CMD ["/1c_dir/1cv8s"]
