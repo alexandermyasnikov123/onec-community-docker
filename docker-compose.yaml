@@ -20,10 +20,12 @@ services:
       dockerfile: ./1c-server/Dockerfile
       args:
         - PLATFORM_VERSION=$PLATFORM_VERSION
-        - ONEC_USER_NAME=$ONEC_USER_NAME
     container_name: 1c-server
+    hostname: 1c-server
     env_file:
       - .env
+    #environment:
+    #  - DISPLAY=$DISPLAY
     depends_on:
       1c-postgres:
         condition: service_healthy
@@ -31,10 +33,12 @@ services:
       - $SERVER_PORT:1540
       - $SERVER_AGENT_PORT:1541
       - $SERVER_WEB_ADMIN_PORT:1542
-      - "1560-1591:1560-1591"
+    #  - "7560-7591:1560-1591"
     volumes:
-      - 1c-server_conf:/1c_dir/conf
-      - 1c-server_data:/home/$ONEC_USER_NAME
+      - 1c-server_opt:/1c_dir
+      - 1c-server_licenses:/1c_licenses
+      - 1c-server_data:/home/usr1cv8
+     # - /tmp/.X11-unix:/tmp/.X11-unix
     restart: no
 
   1c-client:
@@ -42,12 +46,12 @@ services:
       dockerfile: ./1c-client/Dockerfile
       args:
         - PLATFORM_VERSION=$PLATFORM_VERSION
-        - ONEC_USER_NAME=$ONEC_USER_NAME
     container_name: 1c-client
     env_file:
       - .env
     environment:
       - DISPLAY=$DISPLAY
+      - ONEC_USER_NAME=$ONEC_CLIENT_USER_NAME
       - XAUTHORITY=/tmp/.docker.xauth
       - QT_X11_NO_MITSHM=1
       - _X11_NO_MITSHM=1
@@ -55,7 +59,7 @@ services:
     depends_on:
       - 1c-server
     volumes:
-      - 1c-client_home:/home/$ONEC_USER_NAME
+      - 1c-client_home:/home/$ONEC_CLIENT_USER_NAME
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY}:/tmp/.docker.xauth:rw
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
@@ -71,12 +75,19 @@ volumes:
       o: bind
       device: ${BASE_MOUNT_DIR}/data/1c-postgres_data
 
-  1c-server_conf:
+  1c-server_opt:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${BASE_MOUNT_DIR}/data/1c-server_conf
+      device: ${BASE_MOUNT_DIR}/data/1c-server_opt
+
+  1c-server_licenses:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${BASE_MOUNT_DIR}/data/1c-server_licenses
 
   1c-server_data:
     driver: local
