@@ -50,13 +50,13 @@ RUN apt-get update && \
     # Локализация
     language-pack-ru \
     locales \
+    # Различные утилиты
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 RUN sed -i 's/# ru_RU.UTF-8 UTF-8/ru_RU.UTF-8 UTF-8/' /etc/locale.gen && locale-gen ru_RU.UTF-8
 
-ENV LANG=ru_RU.UTF-8
-ENV LANGUAGE=ru_RU:ru
-ENV LC_ALL=ru_RU.UTF-8
+ENV LANG=ru_RU.UTF-8 LANGUAGE=ru_RU:ru LC_ALL=ru_RU.UTF-8
 
 FROM base_image
 LABEL authors="Alexander Myasnikov"
@@ -66,34 +66,25 @@ ARG PLATFORM_ARCH=x86_64
 
 ARG CLIENT_COMPONENTS=client_full,client_thin_fib,desktop_icons,ru
 
-ENV LANG=ru_RU.UTF-8
-ENV LANGUAGE=ru_RU:ru
-ENV LC_ALL=ru_RU.UTF-8
-
-ARG ONEC_USER_GID=1001
-ARG ONEC_USER_UID=1001
-ARG ONEC_USER_NAME=usr1cclnt
-
-RUN groupadd -r grp1cv8 --gid ${ONEC_USER_GID} && \
-    useradd -r -g grp1cv8 --uid ${ONEC_USER_UID} --home-dir /home/${ONEC_USER_NAME} --shell /bin/bash ${ONEC_USER_NAME} && \
-    mkdir -p /home/${ONEC_USER_NAME}/.1cv8 && \
-    chown -R ${ONEC_USER_NAME}:grp1cv8 /home/${ONEC_USER_NAME}
-
 COPY /distr/setup-full-${PLATFORM_VERSION}-${PLATFORM_ARCH}.run /tmp/installer.run
+
+RUN groupadd -r grp1cv8 --gid 1001 && \
+    useradd -r -g grp1cv8 --uid 1001 --home-dir /home/usr1cv8 --shell /bin/bash usr1cv8 && \
+    mkdir -p /home/usr1cv8/.1cv8 && \
+    chown -R usr1cv8:grp1cv8 /home/usr1cv8
 
 RUN chmod +x /tmp/installer.run && \
     /tmp/installer.run --mode unattended --enable-components ${CLIENT_COMPONENTS} && \
     rm /tmp/installer.run
 
-RUN ln -s /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION} /1c_dir
+RUN ln -s /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION} /1c_dir && \
+    mkdir -p /opt/1cv8/scripts &&  \
+    ln -s /opt/1cv8/scripts /1c_scripts
 
-COPY /1c-client/entrypoint.sh /1c_dir/
-RUN chmod +x /1c_dir/entrypoint.sh
+COPY /1c-client/*.sh /1c_scripts/
+RUN chmod +x /1c_scripts/*.sh
 
-VOLUME /home/${ONEC_USER_NAME}
+VOLUME /home/usr1cv8
 
-USER ${ONEC_USER_NAME}
-WORKDIR /home/${ONEC_USER_NAME}
-
-ENTRYPOINT ["/1c_dir/entrypoint.sh"]
-CMD ["/1c_dir/1cv8s"]
+ENTRYPOINT ["/1c_scripts/entrypoint.sh"]
+CMD ["/1c_scripts/run_launcher.sh"]

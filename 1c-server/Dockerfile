@@ -12,6 +12,7 @@ RUN apt-get update && \
     libglib2.0-0 \
     libgstreamer1.0-0 \
     net-tools \
+    iproute2 \
     gosu \
     language-pack-ru \
     locales \
@@ -41,8 +42,6 @@ ENV LANG=ru_RU.UTF-8 LANGUAGE=ru_RU:ru LC_ALL=ru_RU.UTF-8
 FROM base_image
 LABEL authors="Alexander Myasnikov"
 
-ENV DEBIAN_FRONTEND=noninteractive
-
 ARG PLATFORM_VERSION
 ARG PLATFORM_ARCH=x86_64
 ARG SERVER_COMPONENTS=client_thin_fib,server,server_admin,ws,liberica_jre,ru
@@ -60,7 +59,8 @@ RUN ln -s /opt/1cv8/conf /1c_conf && \
     ln -s /opt/1cv8/scripts /1c_scripts && \
     ln -s /opt/1cv8/${PLATFORM_ARCH}/${PLATFORM_VERSION} /1c_dir && \
     ln -s /var/1C/licenses /1c_licenses && \
-    ln -s /1c_dir/ragent 1c_ragent
+    ln -s /1c_dir/ragent 1c_ragent && \
+    ln -s /1c_dir/ras 1c_ras
 
 VOLUME /1c_dir /1c_licenses /home/usr1cv8
 

@@ -5,7 +5,7 @@ services:
     volumes:
       - 1c-postgres_data:/var/lib/pgpro/1c-17/data
     ports:
-      - 127.0.0.1:$ONEC_PG_PORT:5432
+      - $ONEC_PG_PORT:5432
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       start_period: 2s
@@ -24,8 +24,6 @@ services:
     hostname: 1c-server
     env_file:
       - .env
-    #environment:
-    #  - DISPLAY=$DISPLAY
     depends_on:
       1c-postgres:
         condition: service_healthy
@@ -33,12 +31,10 @@ services:
       - $SERVER_PORT:1540
       - $SERVER_AGENT_PORT:1541
       - $SERVER_WEB_ADMIN_PORT:1542
-    #  - "7560-7591:1560-1591"
     volumes:
       - 1c-server_opt:/1c_dir
       - 1c-server_licenses:/1c_licenses
       - 1c-server_data:/home/usr1cv8
-     # - /tmp/.X11-unix:/tmp/.X11-unix
     restart: no
 
   1c-client:
@@ -47,11 +43,11 @@ services:
       args:
         - PLATFORM_VERSION=$PLATFORM_VERSION
     container_name: 1c-client
+    hostname: 1c-client
     env_file:
       - .env
     environment:
       - DISPLAY=$DISPLAY
-      - ONEC_USER_NAME=$ONEC_CLIENT_USER_NAME
       - XAUTHORITY=/tmp/.docker.xauth
       - QT_X11_NO_MITSHM=1
       - _X11_NO_MITSHM=1
@@ -59,7 +55,7 @@ services:
     depends_on:
       - 1c-server
     volumes:
-      - 1c-client_home:/home/$ONEC_CLIENT_USER_NAME
+      - 1c-client_home:/home/usr1cv8
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY}:/tmp/.docker.xauth:rw
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
